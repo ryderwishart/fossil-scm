@@ -16,7 +16,8 @@ interface FossilDownloadUrls {
 export class FossilBinaryManager {
     private static readonly DOWNLOAD_URLS: FossilDownloadUrls = {
         win32: 'https://fossil-scm.org/home/uv/fossil-windows-x64-2.25.zip',
-        darwin: 'https://fossil-scm.org/home/uv/fossil-macos-x64-2.25.tar.gz',
+        darwin: 'https://fossil-scm.org/home/uv/fossil-mac-arm-2.25.tar.gz',
+        // FIXME: intel mac?
         linux: 'https://fossil-scm.org/home/uv/fossil-linux-x64-2.25.tar.gz'
     };
 
@@ -86,7 +87,8 @@ export class FossilBinaryManager {
         }
 
         const downloadUrl = FossilBinaryManager.DOWNLOAD_URLS[platform as keyof FossilDownloadUrls];
-        
+        const isArchiveTarGz = downloadUrl.endsWith('.tar.gz');
+
         return vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
@@ -96,7 +98,7 @@ export class FossilBinaryManager {
             async (progress, token) => {
                 try {
                     progress.report({ message: 'Downloading Fossil binary...' });
-                    
+
                     // Create the binary directory if it doesn't exist
                     const binaryDir = this.fossilExecutable.getBinaryDir();
                     await vscode.workspace.fs.createDirectory(vscode.Uri.file(binaryDir));
@@ -108,11 +110,21 @@ export class FossilBinaryManager {
                     await this.downloadFile(downloadUrl, downloadPath);
 
                     progress.report({ message: 'Extracting Fossil...' });
-                    await ArchiveExtractor.extract(
-                        downloadPath,
-                        vscode.Uri.file(binaryDir),
-                        progress
-                    );
+                    
+                    // Handle tar.gz files differently
+                    if (isArchiveTarGz) {
+                        await ArchiveExtractor.extractTarGz(
+                            downloadPath,
+                            vscode.Uri.file(binaryDir),
+                            progress
+                        );
+                    } else {
+                        await ArchiveExtractor.extract(
+                            downloadPath,
+                            vscode.Uri.file(binaryDir),
+                            progress
+                        );
+                    }
 
                     // Make the binary executable on Unix-like systems
                     if (platform !== 'win32') {
@@ -125,6 +137,7 @@ export class FossilBinaryManager {
 
                     return true;
                 } catch (error) {
+                    console.error('Error during Fossil installation:', error);
                     void vscode.window.showErrorMessage(
                         `Failed to install Fossil: ${error instanceof Error ? error.message : String(error)}`
                     );

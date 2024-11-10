@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
+import * as tar from 'tar';
+import { createGunzip } from 'zlib';
+import { createReadStream } from 'fs';
 
 interface JSZipFile {
     dir: boolean;
@@ -38,7 +40,7 @@ export class ArchiveExtractor {
         const JSZip = require('jszip');
         const archiveData = await vscode.workspace.fs.readFile(archiveUri);
         const zip = await JSZip.loadAsync(archiveData);
-        
+
         const files = zip.files as JSZipFiles;
         for (const [filename, file] of Object.entries(files)) {
             if (!file.dir) {
@@ -50,35 +52,30 @@ export class ArchiveExtractor {
         }
     }
 
-    private static async extractTarGz(
-        archiveUri: vscode.Uri,
+    static async extractTarGz(
+        sourceUri: vscode.Uri,
         targetUri: vscode.Uri,
-        progress: vscode.Progress<{ message?: string; increment?: number }>
+        progress?: vscode.Progress<{ message?: string }>
     ): Promise<void> {
-        const tar = require('tar');
-        const zlib = require('zlib');
-        const archiveData = await vscode.workspace.fs.readFile(archiveUri);
-        
-        // Decompress gzip
-        const unzipped = await new Promise<Buffer>((resolve, reject) => {
-            zlib.gunzip(archiveData, (err: Error | null, result: Buffer) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(result);
-                }
-            });
-        });
+        const sourcePath = sourceUri.fsPath;
+        const targetPath = targetUri.fsPath;
 
-        // Extract tar
-        const entries = await tar.list({ sync: true, noResume: true }, [unzipped]);
-        for (const entry of entries) {
-            progress.report({ message: `Extracting ${entry.name}...` });
-            await tar.extract({ 
-                file: archiveUri.fsPath,
-                cwd: targetUri.fsPath,
-                sync: true
-            });
-        }
+        return new Promise((resolve, reject) => {
+            createReadStream(sourcePath)
+                .pipe(createGunzip())
+                .pipe(
+                    tar.extract({
+                        cwd: targetPath,
+                        strict: true,
+                        onentry: (entry) => {
+                            if (progress) {
+                                progress.report({ message: `Extracting ${entry.path}...` });
+                            }
+                        }
+                    })
+                )
+                .on('end', resolve)
+                .on('error', reject);
+        });
     }
 } 

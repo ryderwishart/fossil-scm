@@ -29,7 +29,7 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	// Register the hello world command
-	let helloCommand = vscode.commands.registerCommand('fossil-scm.helloWorld', async () => {
+	let initializeCommand = vscode.commands.registerCommand('fossil-scm.initialize', async () => {
 		// First ensure fossil exists
 		const fossilExists = await binaryManager.ensureFossilExists();
 		if (!fossilExists) {
@@ -37,10 +37,10 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 
-		void vscode.window.showInformationMessage('Hello World from fossil-scm!');
+		void vscode.window.showInformationMessage('Fossil SCM initialized!');
 	});
 
-	context.subscriptions.push(heartbeatCommand, checkVersionCommand, helloCommand);
+	context.subscriptions.push(heartbeatCommand, checkVersionCommand, initializeCommand);
 }
 
 // This method is called when your extension is deactivated
